@@ -20,6 +20,19 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 - AWS CLI v2 y credenciales del lab de AWS Academy (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y `AWS_SESSION_TOKEN`), o correr todo en AWS CloudShell dentro del lab.
 - Región `us-east-1`.
 
+### En AWS CloudShell
+
+CloudShell no trae Terraform y el home tiene solo 1 GB, que no alcanza para el provider de AWS (~700 MB). Por eso Terraform se instala en `~/bin` y su carpeta de trabajo va a `/tmp`:
+
+```bash
+mkdir -p ~/bin && export PATH=$HOME/bin:$PATH
+curl -sSLO https://releases.hashicorp.com/terraform/1.17.2/terraform_1.17.2_linux_amd64.zip
+unzip -o terraform_1.17.2_linux_amd64.zip terraform -d ~/bin && rm terraform_1.17.2_linux_amd64.zip
+export TF_DATA_DIR=/tmp/tf-data
+```
+
+`/tmp` se borra al cerrar la sesión: en cada sesión nueva hay que repetir los dos `export` y el `terraform init` (el state no se pierde, está en S3).
+
 ## Primera vez: crear el bucket del state
 
 Una sola vez por cuenta (ver [ADR-002](docs/adr/ADR-002-backend-de-terraform.md)):
