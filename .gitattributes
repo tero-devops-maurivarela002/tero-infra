@@ -1,0 +1,2 @@
+# Los scripts se corren en Linux/CloudShell: siempre con LF aunque se clone en Windows
+*.sh text eol=lf

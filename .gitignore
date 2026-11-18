@@ -15,6 +15,9 @@ crash.*.log
 # to change depending on the environment.
 *.tfvars
 *.tfvars.json
+# Excepción: los tfvars por ambiente se versionan (lo pide la letra).
+# No llevan secretos: los secretos van en Secrets Manager.
+!envs/*.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
