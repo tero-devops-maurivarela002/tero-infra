@@ -47,3 +47,21 @@ variable "redis_port" {
   type        = number
   default     = 6379
 }
+
+variable "admin_listener_port" {
+  description = "Puerto del ALB para el panel de administración."
+  type        = number
+  default     = 8081
+}
+
+variable "admin_allowed_cidrs" {
+  description = "Rangos de IP que pueden entrar al panel de administración por el ALB. Vacío = nadie."
+  type        = list(string)
+  default     = []
+}
+
+variable "internal_alb_ports" {
+  description = "Puertos de los listeners del ALB interno (uno por servicio de backend)."
+  type        = list(number)
+  default     = []
+}

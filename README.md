@@ -8,15 +8,22 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 |---|---|
 | `versions.tf` | Versión de Terraform y del provider de AWS, y el backend S3 (vacío, se completa en el `init`). |
 | `providers.tf` | Provider de AWS con etiquetas comunes para todo lo que se crea. |
-| `variables.tf`, `outputs.tf`, `main.tf` | Configuración raíz. |
+| `main.tf`, `ecs.tf`, `secrets.tf`, `db-init.tf` | Configuración raíz: instancia los módulos, el cluster ECS, los 6 servicios, el secreto del admin y la tarea de inicialización de la base. |
+| `variables.tf`, `outputs.tf` | Variables y outputs (todos con `description`). |
+| `modules/network` | VPC, subnets, NAT y security groups. |
+| `modules/alb` | ALB con un listener y target group por servicio. Se usa dos veces: público (ui y admin) e interno (catalog, carts, orders y checkout). |
+| `modules/database` | RDS PostgreSQL, ElastiCache Redis y el secreto de la base. |
+| `modules/ecs-service` | Un microservicio en Fargate (reutilizable, se usa 6 veces). |
+| `tests/` | `terraform test` con providers simulados (no toca AWS). |
 | `backend/<entorno>.hcl` | Key del state, región, cifrado y lock de cada ambiente. |
 | `envs/<entorno>.tfvars` | Valores de cada ambiente (dev, test, prod). No llevan secretos. |
 | `scripts/crear-bucket-state.sh` | Crea a mano el bucket del state (única pieza fuera de Terraform). |
+| `scripts/inicializar-db.sh` | Corre la tarea `db-init` que crea `catalogdb`, `cartdb` y la tabla `cart_items`. |
 | `docs/adr/` | Decisiones de arquitectura (ADR). |
 
 ## Prerrequisitos
 
-- Terraform **1.10 o más nuevo** (por el lock nativo en S3).
+- Terraform **1.11 o más nuevo** (lock nativo en S3 y atributos write-only para que los secretos no queden en el state).
 - AWS CLI v2 y credenciales del lab de AWS Academy (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` y `AWS_SESSION_TOKEN`), o correr todo en AWS CloudShell dentro del lab.
 - Región `us-east-1`.
 
@@ -53,16 +60,42 @@ terraform init -reconfigure \
   -backend-config="backend/${ENTORNO}.hcl" \
   -backend-config="bucket=${BUCKET}"
 
-terraform plan  -var-file="envs/${ENTORNO}.tfvars" -out=tfplan
+terraform plan  -var-file="envs/${ENTORNO}.tfvars" -var="image_tag=<sha de tero-app>" -out=tfplan
 terraform apply tfplan
+
+# Solo la primera vez en cada ambiente: crear las bases
+./scripts/inicializar-db.sh
 ```
+
+`image_tag` es el SHA del commit de tero-app cuya imagen está en ECR. En el día a día lo pasa el pipeline de CD.
+
+## Probar sin AWS
+
+```bash
+terraform init -backend=false
+terraform test
+```
+
+Arma el plan de dev con providers simulados y verifica, entre otras cosas, que haya 6 servicios, Container Insights activado y los log groups con el nombre acordado.
 
 `-reconfigure` hace falta al cambiar de ambiente, porque cada uno tiene su propia key de state.
 
 ## Outputs
 
-| Output | Descripción |
+Ver `outputs.tf` (todos tienen `description`). Los más usados:
+
+| Output | Para qué |
 |---|---|
-| `account_id` | ID de la cuenta de AWS donde se aplicó el ambiente. |
-| `region` | Región usada por el provider. |
-| `environment` | Ambiente al que corresponde el state. |
+| `alb_url` | URL pública de la tienda. |
+| `admin_url` | Panel de administración (solo desde `admin_allowed_cidrs`). |
+| `ecs_cluster_name`, `ecs_services` | Nombres que usa el CD para `update-service`. |
+| `db_secret_arn`, `admin_secret_arn` | Secretos en Secrets Manager. |
+| `db_endpoint`, `redis_endpoint` | Solo accesibles desde los servicios. |
+
+## Secretos
+
+Ninguna contraseña está en el repo ni en el state: se generan en el `apply` y quedan en Secrets Manager (ver [ADR-003](docs/adr/ADR-003-ecs-base-de-datos-y-secretos.md)). Para ver la del panel admin:
+
+```bash
+aws secretsmanager get-secret-value --secret-id tero-dev/admin --query SecretString --output text
+```

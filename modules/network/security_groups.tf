@@ -23,6 +23,18 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   to_port           = 80
 }
 
+# Panel de administración: listener aparte, solo desde las IPs permitidas.
+resource "aws_vpc_security_group_ingress_rule" "alb_admin" {
+  for_each = toset(var.admin_allowed_cidrs)
+
+  security_group_id = aws_security_group.alb.id
+  description       = "Panel admin desde IP permitida"
+  cidr_ipv4         = each.value
+  ip_protocol       = "tcp"
+  from_port         = var.admin_listener_port
+  to_port           = var.admin_listener_port
+}
+
 resource "aws_vpc_security_group_egress_rule" "alb_to_services" {
   security_group_id            = aws_security_group.alb.id
   description                  = "Hacia los contenedores de Tero"
@@ -50,11 +62,12 @@ resource "aws_vpc_security_group_ingress_rule" "services_from_alb" {
   to_port                      = var.app_port
 }
 
-# ui llama a catalog, carts, checkout y orders; checkout llama a orders.
-resource "aws_vpc_security_group_ingress_rule" "services_from_services" {
+# Los servicios se llaman entre sí a través del ALB interno
+# (ui -> catalog, carts, checkout, orders; checkout -> orders).
+resource "aws_vpc_security_group_ingress_rule" "services_from_internal_alb" {
   security_group_id            = aws_security_group.services.id
-  description                  = "Entre servicios de Tero"
-  referenced_security_group_id = aws_security_group.services.id
+  description                  = "Desde el ALB interno"
+  referenced_security_group_id = aws_security_group.internal_alb.id
   ip_protocol                  = "tcp"
   from_port                    = var.app_port
   to_port                      = var.app_port
@@ -67,6 +80,35 @@ resource "aws_vpc_security_group_egress_rule" "services_all" {
   description       = "Salida a AWS (ECR, Secrets Manager, Logs), DB y Redis"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
+}
+
+# ---------------------------------------------------------------- ALB interno
+
+resource "aws_security_group" "internal_alb" {
+  name        = "${var.name}-internal-alb"
+  description = "ALB interno de Tero: los servicios se llaman entre si por aca"
+  vpc_id      = aws_vpc.this.id
+  tags        = { Name = "${var.name}-internal-alb" }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "internal_alb_from_services" {
+  for_each = toset([for p in var.internal_alb_ports : tostring(p)])
+
+  security_group_id            = aws_security_group.internal_alb.id
+  description                  = "Desde los servicios de Tero"
+  referenced_security_group_id = aws_security_group.services.id
+  ip_protocol                  = "tcp"
+  from_port                    = tonumber(each.value)
+  to_port                      = tonumber(each.value)
+}
+
+resource "aws_vpc_security_group_egress_rule" "internal_alb_to_services" {
+  security_group_id            = aws_security_group.internal_alb.id
+  description                  = "Hacia los contenedores de Tero"
+  referenced_security_group_id = aws_security_group.services.id
+  ip_protocol                  = "tcp"
+  from_port                    = var.app_port
+  to_port                      = var.app_port
 }
 
 # ---------------------------------------------------------------- Base de datos y Redis
