@@ -23,6 +23,18 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   to_port           = 80
 }
 
+# Panel de administración: listener aparte, solo desde las IPs permitidas.
+resource "aws_vpc_security_group_ingress_rule" "alb_admin" {
+  for_each = toset(var.admin_allowed_cidrs)
+
+  security_group_id = aws_security_group.alb.id
+  description       = "Panel admin desde IP permitida"
+  cidr_ipv4         = each.value
+  ip_protocol       = "tcp"
+  from_port         = var.admin_listener_port
+  to_port           = var.admin_listener_port
+}
+
 resource "aws_vpc_security_group_egress_rule" "alb_to_services" {
   security_group_id            = aws_security_group.alb.id
   description                  = "Hacia los contenedores de Tero"
