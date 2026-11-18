@@ -15,7 +15,7 @@ Red de un ambiente de Tero: VPC, subnets públicas y privadas en 2 (o 3) zonas d
 │        │                                     ▲                      │
 │        ▼ 8080                                │ salida a internet    │
 │  Subnets privadas 10.x.10.0/24, 10.x.11.0/24 │ (ECR, Secrets, Logs) │
-│     Tareas ECS (sg-services: 8080 desde ALB y entre servicios) ─────┘
+│     Tareas ECS (sg-services: 8080 desde el ALB público y el interno) ┘
 │        │ 5432                │ 6379                                 │
 │        ▼                     ▼                                      │
 │     RDS (sg-database)     ElastiCache (sg-redis)                   │
@@ -54,6 +54,7 @@ module "network" {
 ## Decisiones
 
 - **Servicios en subnets privadas** y la base de datos y Redis solo aceptan tráfico desde el security group de los servicios: resuelve la observación C del assessment (DB y Redis publicados).
+- **ALB interno** (sg-internal-alb): los servicios se llaman entre sí a través de él (puertos 8001-8004), porque Academy no permite Cloud Map.
 - **Reglas por security group, no por IP:** si una tarea cambia de IP, la regla sigue valiendo.
 - **NAT Gateway y no solo endpoints:** los servicios necesitan ECR, Secrets Manager y CloudWatch Logs. Con endpoints de interfaz serían 4 endpoints × 2 zonas (~USD 58/mes) contra ~USD 33/mes de un NAT. Se suma el endpoint *gateway* de S3, que es gratis y saca del NAT la descarga de capas de las imágenes.
 - **Un NAT en dev/test, uno por zona en prod:** en dev ahorramos; en prod, si se cae la zona del NAT, la otra zona sigue saliendo a internet.

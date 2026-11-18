@@ -15,7 +15,7 @@ Condiciones: AWS Academy (sin roles IAM propios, solo `LabRole`), presupuesto ch
 
 1. **ECS Fargate** con un módulo reutilizable `modules/ecs-service` instanciado 6 veces con `for_each`. Cada servicio tiene su task definition, su log group `/tero/<entorno>/<servicio>` y su servicio ECS con *deployment circuit breaker* y rollback automático. Las tareas corren en subnets privadas, sin IP pública.
 2. **ALB** público con dos listeners: `:80` → ui (la tienda) y `:8081` → admin, este último limitado por security group a las IPs de `admin_allowed_cidrs`.
-3. **Descubrimiento de servicios con Cloud Map (DNS privado):** cada servicio se registra como `<servicio>.<entorno>.tero.local`. Es el equivalente directo de los nombres de compose y no agrega contenedores extra.
+3. **Descubrimiento de servicios con un ALB interno:** el mismo módulo `modules/alb` se instancia una segunda vez como ALB interno (en subnets privadas), con un puerto por servicio de backend: catalog `:8001`, carts `:8002`, orders `:8003` y checkout `:8004`. ui y checkout reciben esas URLs por variables de entorno (lo que en compose era `http://catalog:8080`). El ALB además balancea entre tareas y saca de rotación las que fallan el health check.
 4. **RDS PostgreSQL 16** y **ElastiCache Redis** en subnets privadas, cifrados en reposo. Redis también cifra en tránsito (`rediss://`, que checkout ya soporta). En prod: Multi-AZ, réplica de Redis, 2 tareas por servicio y protección contra borrado (ver `envs/prod.tfvars`).
 5. **Secretos fuera del state:** las contraseñas (base y admin) se generan con recursos `ephemeral "random_password"` y se escriben con atributos *write-only* (`password_wo`, `secret_string_wo`). Terraform las manda a AWS pero no las guarda ni en el plan ni en el state. Quedan en **Secrets Manager** y las tareas las reciben con `secrets = [{ name, valueFrom }]`, así que tampoco aparecen en la task definition.
 6. **Rotación controlada:** subir `db_password_version` o `admin_secret_version` en 1 genera una contraseña nueva y la cambia en RDS y en Secrets Manager en el mismo `apply`; después se fuerza un deploy nuevo de ECS para que las tareas la lean (runbook en DEVOPS-55).
@@ -24,7 +24,7 @@ Condiciones: AWS Academy (sin roles IAM propios, solo `LabRole`), presupuesto ch
 ## Alternativas consideradas
 
 - **`manage_master_user_password = true` en RDS:** RDS genera y guarda la contraseña en Secrets Manager. Lo descartamos porque la **rota sola cada 7 días** y las tareas que ya están corriendo quedarían con la contraseña vieja hasta el próximo deploy. Con write-only controlamos cuándo se rota.
-- **ECS Service Connect** en lugar de Cloud Map DNS: agrega un proxy (Envoy) a cada tarea, con métricas por request, pero suma memoria y complejidad. Para 6 servicios alcanza con DNS.
+- **Cloud Map (DNS privado `<servicio>.<entorno>.tero.local`) o ECS Service Connect:** era la primera opción, sin costo extra. **AWS Academy no lo permite**: el primer `apply` falló con `AccessDeniedException` en `servicediscovery:CreatePrivateDnsNamespace`, y Service Connect también necesita un namespace de Cloud Map. El ALB interno cuesta ~USD 0,55 por día más.
 - **Base y Redis como contenedores en ECS:** más barato, pero sin backups ni Multi-AZ, y los datos se pierden si la tarea se reinicia.
 - **Un ALB por servicio o rutas por path:** el admin no soporta servir desde un subpath, y un ALB por servicio duplica el costo.
 

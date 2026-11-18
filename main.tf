@@ -5,6 +5,14 @@ data "aws_region" "current" {}
 locals {
   name         = "tero-${var.environment}"
   ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.region}.amazonaws.com"
+
+  # Puertos del ALB interno: uno por servicio de backend.
+  internal_ports = {
+    catalog  = 8001
+    carts    = 8002
+    orders   = 8003
+    checkout = 8004
+  }
 }
 
 # Red: VPC, subnets públicas y privadas en 2 zonas, NAT y security groups.
@@ -16,6 +24,7 @@ module "network" {
   az_count            = var.az_count
   single_nat_gateway  = var.single_nat_gateway
   admin_allowed_cidrs = var.admin_allowed_cidrs
+  internal_alb_ports  = values(local.internal_ports)
 }
 
 # ALB público: :80 -> ui, :8081 -> admin.
@@ -24,9 +33,22 @@ module "alb" {
 
   name                = local.name
   vpc_id              = module.network.vpc_id
-  public_subnet_ids   = module.network.public_subnet_ids
+  subnet_ids          = module.network.public_subnet_ids
   security_group_id   = module.network.alb_security_group_id
+  listeners           = { ui = 80, admin = 8081 }
   deletion_protection = var.alb_deletion_protection
+}
+
+# ALB interno: así se llaman los servicios entre sí (en Academy no hay Cloud Map).
+module "internal_alb" {
+  source = "./modules/alb"
+
+  name              = "${local.name}-int"
+  internal          = true
+  vpc_id            = module.network.vpc_id
+  subnet_ids        = module.network.private_subnet_ids
+  security_group_id = module.network.internal_alb_security_group_id
+  listeners         = local.internal_ports
 }
 
 # PostgreSQL (RDS) y Redis (ElastiCache) en subnets privadas.

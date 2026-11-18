@@ -8,8 +8,19 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "public_subnet_ids" {
-  description = "Subnets públicas donde vive el ALB (al menos 2 zonas)."
+variable "internal" {
+  description = "false: ALB público (subnets públicas). true: ALB interno, solo accesible dentro de la VPC."
+  type        = bool
+  default     = false
+}
+
+variable "listeners" {
+  description = "Un listener HTTP y un target group por entrada: nombre => puerto del ALB."
+  type        = map(number)
+}
+
+variable "subnet_ids" {
+  description = "Subnets donde vive el ALB: públicas si es público, privadas si es interno (al menos 2 zonas)."
   type        = list(string)
 }
 
@@ -22,12 +33,6 @@ variable "app_port" {
   description = "Puerto de los contenedores detrás del ALB."
   type        = number
   default     = 8080
-}
-
-variable "admin_listener_port" {
-  description = "Puerto del listener del panel de administración."
-  type        = number
-  default     = 8081
 }
 
 variable "health_check_path" {

@@ -59,3 +59,9 @@ variable "admin_allowed_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "internal_alb_ports" {
+  description = "Puertos de los listeners del ALB interno (uno por servicio de backend)."
+  type        = list(number)
+  default     = []
+}

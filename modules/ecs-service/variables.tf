@@ -80,14 +80,9 @@ variable "task_role_arn" {
 }
 
 variable "target_group_arn" {
-  description = "Target group del ALB al que se registra el servicio. null si no recibe tráfico del ALB."
+  description = "Target group del ALB (público o interno) al que se registra el servicio. null si no recibe tráfico."
   type        = string
   default     = null
-}
-
-variable "service_discovery_namespace_id" {
-  description = "Namespace de Cloud Map: el servicio queda accesible como <name>.<namespace> para los demás."
-  type        = string
 }
 
 variable "log_retention_days" {

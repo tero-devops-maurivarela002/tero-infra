@@ -14,7 +14,7 @@ output "dns_name" {
 }
 
 output "target_group_arns" {
-  description = "ARN de los target groups, por servicio (ui y admin)."
+  description = "ARN de los target groups, por nombre de listener."
   value       = { for k, tg in aws_lb_target_group.this : k => tg.arn }
 }
 

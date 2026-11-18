@@ -1,17 +1,19 @@
-# ALB público de Tero (DEVOPS-43).
+# Módulo reutilizable de ALB (DEVOPS-43). Se usa dos veces:
 #
-#   :80   -> target group "ui"    (la tienda)
-#   :8081 -> target group "admin" (panel de administración; el security group
-#            del módulo network solo deja entrar a las IPs permitidas)
+#   - público (internal = false): :80 -> ui (la tienda), :8081 -> admin.
+#   - interno (internal = true): un puerto por servicio de backend
+#     (catalog, carts, orders, checkout). Es como los servicios se encuentran
+#     entre sí: en AWS Academy no se puede usar Cloud Map (DNS interno).
 #
-# Los target groups son de tipo "ip" porque las tareas Fargate tienen su
-# propia interfaz de red (modo awsvpc) y se registran por IP.
+# Cada entrada de "listeners" crea un listener HTTP en ese puerto y un target
+# group del mismo nombre. Los target groups son de tipo "ip" porque las
+# tareas Fargate se registran por IP (modo de red awsvpc).
 
 resource "aws_lb" "this" {
   name               = "${var.name}-alb"
   load_balancer_type = "application"
-  internal           = false
-  subnets            = var.public_subnet_ids
+  internal           = var.internal
+  subnets            = var.subnet_ids
   security_groups    = [var.security_group_id]
 
   drop_invalid_header_fields = true
@@ -21,7 +23,7 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "this" {
-  for_each = toset(["ui", "admin"])
+  for_each = var.listeners
 
   name        = "${var.name}-${each.key}"
   vpc_id      = var.vpc_id
@@ -44,24 +46,26 @@ resource "aws_lb_target_group" "this" {
   tags = { Name = "${var.name}-${each.key}" }
 }
 
-resource "aws_lb_listener" "http" {
+resource "aws_lb_listener" "this" {
+  for_each = var.listeners
+
   load_balancer_arn = aws_lb.this.arn
-  port              = 80
+  port              = each.value
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.this["ui"].arn
+    target_group_arn = aws_lb_target_group.this[each.key].arn
   }
 }
 
-resource "aws_lb_listener" "admin" {
-  load_balancer_arn = aws_lb.this.arn
-  port              = var.admin_listener_port
-  protocol          = "HTTP"
+# Los listeners se llamaban "http" y "admin" en la primera versión del módulo.
+moved {
+  from = aws_lb_listener.http
+  to   = aws_lb_listener.this["ui"]
+}
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.this["admin"].arn
-  }
+moved {
+  from = aws_lb_listener.admin
+  to   = aws_lb_listener.this["admin"]
 }

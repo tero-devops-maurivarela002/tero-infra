@@ -21,9 +21,6 @@ mock_provider "aws" {
   mock_resource "aws_lb" {
     defaults = { arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tero-dev-alb/abc", dns_name = "tero-dev-alb-123.us-east-1.elb.amazonaws.com" }
   }
-  mock_resource "aws_service_discovery_service" {
-    defaults = { arn = "arn:aws:servicediscovery:us-east-1:123456789012:service/srv-abc" }
-  }
   mock_resource "aws_ecs_cluster" {
     defaults = { arn = "arn:aws:ecs:us-east-1:123456789012:cluster/tero-dev" }
   }
@@ -66,6 +63,11 @@ run "apply_dev_simulado" {
   assert {
     condition     = output.ecs_services["catalog"].log_group == "/tero/dev/catalog"
     error_message = "Los log groups tienen que ser /tero/<entorno>/<servicio> (decisión de DEVOPS-47)."
+  }
+
+  assert {
+    condition     = startswith(module.service["ui"].task_definition_arn, "") && length(module.internal_alb.target_group_arns) == 4
+    error_message = "El ALB interno tiene que tener un target group por servicio de backend."
   }
 
   assert {

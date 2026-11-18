@@ -1,8 +1,8 @@
 # Módulo reutilizable: un microservicio de Tero en ECS Fargate (DEVOPS-43).
 # Se instancia una vez por servicio con for_each desde la raíz.
 #
-# Crea: log group, task definition, registro en Cloud Map (DNS interno) y el
-# servicio ECS (con registro en el ALB si corresponde).
+# Crea: log group, task definition y el servicio ECS, registrado en el target
+# group de un ALB (el público para ui/admin, el interno para el resto).
 
 data "aws_region" "current" {}
 
@@ -52,24 +52,6 @@ resource "aws_ecs_task_definition" "this" {
   }])
 }
 
-# Registro DNS interno: los demás servicios lo encuentran como
-# http://<name>.<namespace>:8080 (igual que "http://catalog:8080" en compose).
-resource "aws_service_discovery_service" "this" {
-  name = var.name
-
-  dns_config {
-    namespace_id   = var.service_discovery_namespace_id
-    routing_policy = "MULTIVALUE"
-
-    dns_records {
-      type = "A"
-      ttl  = 10
-    }
-  }
-
-  health_check_custom_config {}
-}
-
 resource "aws_ecs_service" "this" {
   name            = var.name
   cluster         = var.cluster_arn
@@ -92,10 +74,6 @@ resource "aws_ecs_service" "this" {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
     assign_public_ip = false
-  }
-
-  service_registries {
-    registry_arn = aws_service_discovery_service.this.arn
   }
 
   dynamic "load_balancer" {

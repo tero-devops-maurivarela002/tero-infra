@@ -47,3 +47,8 @@ output "redis_security_group_id" {
   description = "Security group de ElastiCache Redis (solo acepta desde los servicios)."
   value       = aws_security_group.redis.id
 }
+
+output "internal_alb_security_group_id" {
+  description = "Security group del ALB interno."
+  value       = aws_security_group.internal_alb.id
+}

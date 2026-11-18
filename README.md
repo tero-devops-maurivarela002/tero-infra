@@ -11,7 +11,7 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `main.tf`, `ecs.tf`, `secrets.tf`, `db-init.tf` | Configuración raíz: instancia los módulos, el cluster ECS, los 6 servicios, el secreto del admin y la tarea de inicialización de la base. |
 | `variables.tf`, `outputs.tf` | Variables y outputs (todos con `description`). |
 | `modules/network` | VPC, subnets, NAT y security groups. |
-| `modules/alb` | ALB público y target groups de ui y admin. |
+| `modules/alb` | ALB con un listener y target group por servicio. Se usa dos veces: público (ui y admin) e interno (catalog, carts, orders y checkout). |
 | `modules/database` | RDS PostgreSQL, ElastiCache Redis y el secreto de la base. |
 | `modules/ecs-service` | Un microservicio en Fargate (reutilizable, se usa 6 veces). |
 | `tests/` | `terraform test` con providers simulados (no toca AWS). |

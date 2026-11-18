@@ -21,18 +21,10 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
   capacity_providers = ["FARGATE"]
 }
 
-# DNS interno: cada servicio queda como <servicio>.<ambiente>.tero.local
-resource "aws_service_discovery_private_dns_namespace" "this" {
-  name        = local.namespace
-  description = "DNS interno de los servicios de ${local.name}"
-  vpc         = module.network.vpc_id
-}
-
 locals {
-  namespace = "${var.environment}.tero.local"
-
-  # URL interna de cada servicio (equivale a http://catalog:8080 en compose).
-  url = { for s in ["catalog", "carts", "orders", "checkout"] : s => "http://${s}.${local.namespace}:8080" }
+  # URL interna de cada servicio de backend: un puerto del ALB interno por
+  # servicio (equivale a http://catalog:8080 en compose).
+  url = { for svc, port in local.internal_ports : svc => "http://${module.internal_alb.dns_name}:${port}" }
 
   db_secret = module.database.db_secret_arn
 
@@ -41,7 +33,7 @@ locals {
   services = {
     catalog = {
       repository = "catalog"
-      target     = null
+      alb        = "internal"
       env = {
         GIN_MODE                            = "release"
         RETAIL_CATALOG_PERSISTENCE_PROVIDER = "postgres"
@@ -55,7 +47,7 @@ locals {
     }
     carts = {
       repository = "cart"
-      target     = null
+      alb        = "internal"
       env = {
         CART_PERSISTENCE_PROVIDER = "postgres"
         CART_POSTGRES_HOST        = module.database.db_address
@@ -70,7 +62,7 @@ locals {
     }
     orders = {
       repository = "orders"
-      target     = null
+      alb        = "internal"
       env = {
         GIN_MODE                           = "release"
         RETAIL_ORDERS_PERSISTENCE_ENDPOINT = "${module.database.db_address}:${module.database.db_port}"
@@ -83,7 +75,7 @@ locals {
     }
     checkout = {
       repository = "checkout"
-      target     = null
+      alb        = "internal"
       env = {
         RETAIL_CHECKOUT_PERSISTENCE_PROVIDER  = "redis"
         RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL = module.database.redis_url
@@ -93,7 +85,7 @@ locals {
     }
     ui = {
       repository = "ui"
-      target     = "ui"
+      alb        = "public"
       env = {
         RETAIL_UI_ENDPOINTS_CATALOG  = local.url["catalog"]
         RETAIL_UI_ENDPOINTS_CARTS    = local.url["carts"]
@@ -104,7 +96,7 @@ locals {
     }
     admin = {
       repository = "admin"
-      target     = "admin"
+      alb        = "public"
       env = {
         DB_HOST = module.database.db_address
         DB_PORT = tostring(module.database.db_port)
@@ -143,7 +135,6 @@ module "service" {
   execution_role_arn = data.aws_iam_role.lab.arn
   task_role_arn      = data.aws_iam_role.lab.arn
 
-  target_group_arn               = each.value.target == null ? null : module.alb.target_group_arns[each.value.target]
-  service_discovery_namespace_id = aws_service_discovery_private_dns_namespace.this.id
-  log_retention_days             = var.log_retention_days
+  target_group_arn   = each.value.alb == "public" ? module.alb.target_group_arns[each.key] : module.internal_alb.target_group_arns[each.key]
+  log_retention_days = var.log_retention_days
 }
