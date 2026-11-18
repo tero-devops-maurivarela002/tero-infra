@@ -57,10 +57,13 @@ Una sola vez por cuenta, antes del primer push de imágenes. La misma imagen se 
 
 ```bash
 cd global
+export TF_DATA_DIR=/tmp/tf-data-global   # carpeta de trabajo propia (si no, choca con el backend del ambiente)
 terraform init -backend-config=../backend/global.hcl -backend-config="bucket=${BUCKET}"
 terraform plan -out=/tmp/tfplan-global && terraform apply /tmp/tfplan-global
-cd ..
+cd .. && export TF_DATA_DIR=/tmp/tf-data
 ```
+
+> Si `terraform init` dice *Backend configuration changed*, **no** uses `-migrate-state` (copiaría un state en la key de otro). Es que la carpeta de trabajo (`TF_DATA_DIR` o `.terraform/`) quedó apuntando a otro backend: usá una carpeta distinta o `-reconfigure`.
 
 Crea `tero/catalog`, `tero/cart`, `tero/orders`, `tero/checkout`, `tero/ui` y `tero/admin`, con tags inmutables, *scan on push* y una política que guarda las últimas 30 imágenes.
 
