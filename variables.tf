@@ -13,3 +13,20 @@ variable "environment" {
     error_message = "environment tiene que ser dev, test o prod."
   }
 }
+
+variable "vpc_cidr" {
+  description = "Rango de IPs de la VPC del ambiente. Uno distinto por ambiente para poder conectarlas en el futuro sin solaparse."
+  type        = string
+}
+
+variable "az_count" {
+  description = "Cantidad de zonas de disponibilidad (2 alcanza para el ALB y Multi-AZ)."
+  type        = number
+  default     = 2
+}
+
+variable "single_nat_gateway" {
+  description = "true: un NAT compartido (barato, dev y test). false: un NAT por zona (alta disponibilidad, prod)."
+  type        = bool
+  default     = true
+}
