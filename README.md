@@ -15,7 +15,8 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `modules/database` | RDS PostgreSQL, ElastiCache Redis y el secreto de la base. |
 | `modules/ecs-service` | Un microservicio en Fargate (reutilizable, se usa 6 veces). |
 | `tests/` | `terraform test` con providers simulados (no toca AWS). |
-| `backend/<entorno>.hcl` | Key del state, región, cifrado y lock de cada ambiente. |
+| `backend/<entorno>.hcl` | Key del state, región, cifrado y lock de cada ambiente (y `global.hcl` para lo compartido). |
+| `global/` | Recursos compartidos por los 3 ambientes: los repositorios de ECR (state propio). |
 | `envs/<entorno>.tfvars` | Valores de cada ambiente (dev, test, prod). No llevan secretos. |
 | `scripts/crear-bucket-state.sh` | Crea a mano el bucket del state (única pieza fuera de Terraform). |
 | `scripts/inicializar-db.sh` | Corre la tarea `db-init` que crea `catalogdb`, `cartdb` y la tabla `cart_items`. |
@@ -49,6 +50,19 @@ Una sola vez por cuenta (ver [ADR-002](docs/adr/ADR-002-backend-de-terraform.md)
 ```
 
 Crea `tero-tfstate-<ID de la cuenta>` con versionado, cifrado, acceso público bloqueado y solo HTTPS. Si se vuelve a correr, no rompe nada.
+
+## Recursos compartidos (ECR)
+
+Una sola vez por cuenta, antes del primer push de imágenes. La misma imagen se promueve entre ambientes, así que ECR no depende del ambiente:
+
+```bash
+cd global
+terraform init -backend-config=../backend/global.hcl -backend-config="bucket=${BUCKET}"
+terraform plan -out=/tmp/tfplan-global && terraform apply /tmp/tfplan-global
+cd ..
+```
+
+Crea `tero/catalog`, `tero/cart`, `tero/orders`, `tero/checkout`, `tero/ui` y `tero/admin`, con tags inmutables, *scan on push* y una política que guarda las últimas 30 imágenes.
 
 ## Uso por ambiente
 
