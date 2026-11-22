@@ -1,0 +1,199 @@
+# Pipeline de Terraform de tero-infra (DEVOPS-45, DEVOPS-36)
+#
+# Etapas, encadenadas con "needs":
+#   1. validate -> terraform fmt -check, validate (raíz y global/) y
+#                  terraform test (con mock_provider: no toca AWS).
+#   2. checkov  -> análisis estático de seguridad de la infraestructura (IaC).
+#                  Falla si hay un hallazgo sin justificar. Las excepciones
+#                  están en el código (#checkov:skip=ID:motivo) y explicadas en
+#                  docs/seguridad/checkov.md.
+#   3. dev      -> plan de global/ (ECR) y de dev contra AWS. En un PR el plan
+#                  queda en el resumen del run para revisarlo antes de mergear.
+#                  En un push (merge) a develop se aplica ESE MISMO plan.
+#
+# test y prod se van a sumar en el Sprint 4 (desde main, con aprobación manual).
+
+name: Terraform
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "plan o apply sobre dev"
+        type: choice
+        options: [plan, apply]
+        default: plan
+      image_tag:
+        description: "SHA de tero-app a usar (vacío = el que está corriendo en dev)"
+        type: string
+        required: false
+
+# Mínimo privilegio: solo leer el código (checkov sube SARIF con su propio permiso).
+permissions:
+  contents: read
+
+# bash con pipefail: si terraform falla, el "| tee" no lo tapa.
+defaults:
+  run:
+    shell: bash
+
+env:
+  TF_VERSION: 1.17.2
+  CHECKOV_VERSION: 3.4.5
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Terraform (versión fija y checksum verificado)
+        run: ./scripts/ci/instalar-terraform.sh
+
+      - name: terraform fmt -check
+        # Falla si algún archivo no está formateado (se arregla con terraform fmt -recursive).
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform validate (raíz)
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform validate (global/)
+        working-directory: global
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform test
+        # Plan con proveedores simulados: valida la lógica sin credenciales.
+        run: terraform test
+
+  checkov:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # subir el SARIF a GitHub Security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Checkov (versión fija)
+        run: |
+          python3 -m pip install --user "checkov==${CHECKOV_VERSION}"
+          checkov --version
+
+      - name: Checkov (gate)
+        # Falla con cualquier hallazgo que no tenga un skip justificado.
+        run: |
+          checkov -d . --framework terraform --compact \
+            --output cli --output sarif --output-file-path console,checkov
+
+      - name: Publicar hallazgos en GitHub Security
+        if: always() && hashFiles('checkov/results_sarif.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: checkov/results_sarif.sarif
+          category: checkov
+
+      - name: Guardar el reporte
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checkov
+          path: checkov/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  dev:
+    name: dev (plan / apply)
+    needs: [validate, checkov]
+    # main todavía no despliega nada (test/prod en el Sprint 4).
+    if: github.base_ref == 'develop' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Un solo plan/apply a la vez sobre dev (además del lock del state en S3).
+    concurrency:
+      group: terraform-dev
+      cancel-in-progress: false
+    env:
+      APPLY: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Terraform (versión fija y checksum verificado)
+        run: ./scripts/ci/instalar-terraform.sh
+
+      - name: Credenciales de AWS (AWS Academy)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # Academy da credenciales temporales: sin el session token no autentican.
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Preparar variables (bucket, image_tag, IPs del admin)
+        id: vars
+        env:
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+          ADMIN_ALLOWED_CIDRS: ${{ secrets.ADMIN_ALLOWED_CIDRS }}
+        run: ./scripts/ci/preparar-variables.sh dev
+
+      - name: Plan global/ (ECR)
+        working-directory: global
+        env:
+          TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
+        run: |
+          terraform init -backend-config=../backend/global.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
+          terraform plan -no-color -out="$RUNNER_TEMP/global.tfplan" | tee "$RUNNER_TEMP/global-plan.txt"
+
+      - name: Plan dev
+        env:
+          TF_DATA_DIR: ${{ runner.temp }}/tf-data-dev
+        run: |
+          terraform init -backend-config=backend/dev.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
+          # La IP del admin va en un archivo (no en la línea de comandos ni en el repo).
+          terraform plan -no-color -var-file=envs/dev.tfvars \
+            -var-file="$RUNNER_TEMP/ci.auto.tfvars.json" \
+            -out="$RUNNER_TEMP/dev.tfplan" | tee "$RUNNER_TEMP/dev-plan.txt"
+
+      - name: Resumen del plan
+        if: always()
+        run: |
+          {
+            echo "### Terraform: dev (image_tag \`${{ steps.vars.outputs.image_tag }}\`)"
+            for f in global dev; do
+              [ -f "$RUNNER_TEMP/$f-plan.txt" ] || continue
+              echo "#### $f"
+              grep -E '^Plan:|^No changes|will be (created|destroyed|updated|replaced)|must be replaced' "$RUNNER_TEMP/$f-plan.txt" | sed 's/^/- /' || true
+            done
+            echo
+            if [ "$APPLY" = "true" ]; then echo "Se aplica este plan."; else echo "Solo plan (no se aplica)."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---- Apply: solo en merge a develop o a mano (workflow_dispatch con apply).
+      # Se aplica el plan guardado arriba: lo que se revisó es exactamente lo que se aplica.
+
+      - name: Apply global/
+        if: env.APPLY == 'true'
+        working-directory: global
+        env:
+          TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
+        run: terraform apply -no-color "$RUNNER_TEMP/global.tfplan"
+
+      - name: Apply dev
+        if: env.APPLY == 'true'
+        env:
+          TF_DATA_DIR: ${{ runner.temp }}/tf-data-dev
+        run: terraform apply -no-color "$RUNNER_TEMP/dev.tfplan"
