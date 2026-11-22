@@ -28,7 +28,9 @@ merge a develop ─► validate + checkov ─► dev: plan ─► apply de ESE p
   `["1.2.3.4/32"]`), enmascarado en los logs. Sin el secret, el admin queda
   cerrado (lista vacía), que es lo seguro por defecto.
 - **Un run a la vez** (`concurrency: terraform-dev`), además del lock del state
-  en S3 (`use_lockfile`).
+  en S3 (`use_lockfile`). Si alguien está corriendo un apply a mano (por
+  ejemplo desde CloudShell), el pipeline espera hasta 15 minutos a que se libere
+  el lock (`-lock-timeout=15m`) en lugar de fallar enseguida.
 - **Versiones fijas**: Terraform 1.17.2 con checksum verificado, Checkov 3.4.5,
   acciones de GitHub por SHA.
 - **test y prod**: se agregan en el Sprint 4, desde `main` y con aprobación manual

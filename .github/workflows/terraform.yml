@@ -164,7 +164,7 @@ jobs:
           TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
         run: |
           terraform init -backend-config=../backend/global.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
-          terraform plan -no-color -out="$RUNNER_TEMP/global.tfplan" | tee "$RUNNER_TEMP/global-plan.txt"
+          terraform plan -no-color -lock-timeout=15m -out="$RUNNER_TEMP/global.tfplan" | tee "$RUNNER_TEMP/global-plan.txt"
 
       - name: Plan dev
         env:
@@ -172,7 +172,7 @@ jobs:
         run: |
           terraform init -backend-config=backend/dev.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
           # La IP del admin va en un archivo (no en la línea de comandos ni en el repo).
-          terraform plan -no-color -var-file=envs/dev.tfvars \
+          terraform plan -no-color -lock-timeout=15m -var-file=envs/dev.tfvars \
             -var-file="$RUNNER_TEMP/ci.auto.tfvars.json" \
             -out="$RUNNER_TEMP/dev.tfplan" | tee "$RUNNER_TEMP/dev-plan.txt"
 
@@ -198,10 +198,10 @@ jobs:
         working-directory: global
         env:
           TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
-        run: terraform apply -no-color "$RUNNER_TEMP/global.tfplan"
+        run: terraform apply -no-color -lock-timeout=15m "$RUNNER_TEMP/global.tfplan"
 
       - name: Apply dev
         if: env.APPLY == 'true'
         env:
           TF_DATA_DIR: ${{ runner.temp }}/tf-data-dev
-        run: terraform apply -no-color "$RUNNER_TEMP/dev.tfplan"
+        run: terraform apply -no-color -lock-timeout=15m "$RUNNER_TEMP/dev.tfplan"
