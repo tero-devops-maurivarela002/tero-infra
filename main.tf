@@ -43,12 +43,13 @@ module "alb" {
 module "internal_alb" {
   source = "./modules/alb"
 
-  name              = "${local.name}-int"
-  internal          = true
-  vpc_id            = module.network.vpc_id
-  subnet_ids        = module.network.private_subnet_ids
-  security_group_id = module.network.internal_alb_security_group_id
-  listeners         = local.internal_ports
+  name                = "${local.name}-int"
+  internal            = true
+  vpc_id              = module.network.vpc_id
+  subnet_ids          = module.network.private_subnet_ids
+  security_group_id   = module.network.internal_alb_security_group_id
+  listeners           = local.internal_ports
+  deletion_protection = var.alb_deletion_protection
 }
 
 # PostgreSQL (RDS) y Redis (ElastiCache) en subnets privadas.

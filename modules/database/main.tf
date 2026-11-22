@@ -16,6 +16,9 @@ ephemeral "random_password" "db" {
 }
 
 resource "aws_secretsmanager_secret" "db" {
+  #checkov:skip=CKV2_AWS_57:La rotación automática requiere una Lambda con rol propio (Academy no permite crear roles); rotación manual en el runbook (DEVOPS-35)
+  #checkov:skip=CKV_AWS_149:Cifrado con la clave administrada por AWS (aws/secretsmanager); una CMK suma costo y gestión de key policies
+
   name        = "${var.name}/database"
   description = "Credenciales de PostgreSQL de ${var.name} (usuario, contraseña, host, puerto)."
 
@@ -60,6 +63,13 @@ resource "aws_db_parameter_group" "this" {
 }
 
 resource "aws_db_instance" "this" {
+  #checkov:skip=CKV_AWS_157:Multi-AZ es por ambiente (db_multi_az: true en prod)
+  #checkov:skip=CKV_AWS_293:Deletion protection es por ambiente (db_deletion_protection: true en prod)
+  #checkov:skip=CKV_AWS_118:Enhanced monitoring requiere un rol de IAM propio (no permitido en Academy); se usan métricas de CloudWatch
+  #checkov:skip=CKV_AWS_161:Las apps se autentican con usuario/contraseña desde Secrets Manager; IAM auth requiere cambios en las apps
+  #checkov:skip=CKV_AWS_353:Performance Insights no se usa en db.t3.micro de dev/test; evaluar en prod
+  #checkov:skip=CKV2_AWS_69:catalog y orders usan sslmode=disable; forzar TLS (rds.force_ssl=1) queda como hallazgo abierto para DEVOPS-37
+
   identifier     = "${var.name}-postgres"
   engine         = "postgres"
   engine_version = var.db_engine_version
@@ -104,6 +114,10 @@ resource "aws_elasticache_subnet_group" "this" {
 }
 
 resource "aws_elasticache_replication_group" "this" {
+  #checkov:skip=CKV_AWS_31:TLS en tránsito está activo; AUTH token pendiente (requiere cambiar la URL de checkout). Acceso solo desde el SG de servicios
+  #checkov:skip=CKV_AWS_191:Cifrado en reposo con la clave administrada por AWS; una CMK suma costo y gestión de key policies
+  #checkov:skip=CKV2_AWS_50:Multi-AZ con failover es por ambiente (redis_replicas: 1 en prod)
+
   replication_group_id = "${var.name}-redis"
   description          = "Redis de ${var.name} (carritos en checkout)"
 

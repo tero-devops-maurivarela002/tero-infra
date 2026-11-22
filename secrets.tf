@@ -17,6 +17,9 @@ ephemeral "random_password" "admin_jwt" {
 }
 
 resource "aws_secretsmanager_secret" "admin" {
+  #checkov:skip=CKV2_AWS_57:La rotación automática requiere una Lambda con rol propio; rotación manual en el runbook (DEVOPS-35)
+  #checkov:skip=CKV_AWS_149:Cifrado con la clave administrada por AWS (aws/secretsmanager)
+
   name                    = "${local.name}/admin"
   description             = "Credenciales del panel de administración de ${local.name} y clave para firmar los JWT."
   recovery_window_in_days = 0

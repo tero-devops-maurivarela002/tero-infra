@@ -10,6 +10,11 @@
 # tareas Fargate se registran por IP (modo de red awsvpc).
 
 resource "aws_lb" "this" {
+  #checkov:skip=CKV2_AWS_20:Sin dominio/certificado ACM no hay HTTPS al que redirigir (docs/seguridad/checkov.md)
+  #checkov:skip=CKV2_AWS_28:WAF tiene costo fijo y no está habilitado en AWS Academy; riesgo aceptado (docs/seguridad/checkov.md)
+  #checkov:skip=CKV_AWS_91:Access logs del ALB necesitan bucket con política de ELB; mejora planificada, se usan logs de los servicios
+  #checkov:skip=CKV_AWS_150:La protección contra borrado es por ambiente (alb_deletion_protection: true en prod)
+
   name               = "${var.name}-alb"
   load_balancer_type = "application"
   internal           = var.internal
@@ -23,6 +28,8 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "this" {
+  #checkov:skip=CKV_AWS_378:ALB -> tareas por HTTP dentro de la VPC (subnets privadas, SG solo desde el ALB); TLS termina en el ALB
+
   for_each = var.listeners
 
   name        = "${var.name}-${each.key}"
@@ -47,6 +54,9 @@ resource "aws_lb_target_group" "this" {
 }
 
 resource "aws_lb_listener" "this" {
+  #checkov:skip=CKV_AWS_2:Sin dominio propio en AWS Academy no hay certificado ACM; HTTPS cuando haya dominio
+  #checkov:skip=CKV_AWS_103:No aplica: el listener es HTTP (sin TLS) por falta de certificado; ver CKV_AWS_2
+
   for_each = var.listeners
 
   load_balancer_arn = aws_lb.this.arn
