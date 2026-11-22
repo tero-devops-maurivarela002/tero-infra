@@ -98,8 +98,16 @@ jobs:
           checkov -d . --framework terraform --compact \
             --output cli --output sarif --output-file-path console,checkov
 
+      - name: ¿Hay reporte SARIF?
+        # (hashFiles() falla en este repo; se chequea el archivo a mano)
+        id: sarif
+        if: always()
+        run: |
+          if [ -f checkov/results_sarif.sarif ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+          ls -la checkov/ || true
+
       - name: Publicar hallazgos en GitHub Security
-        if: always() && hashFiles('checkov/results_sarif.sarif') != ''
+        if: always() && steps.sarif.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: checkov/results_sarif.sarif
