@@ -20,8 +20,9 @@ merge a develop ─► validate + checkov ─► dev: plan ─► apply de ESE p
   nuevo: lo que se ve en el resumen es exactamente lo que se aplica.
 - **`global/` antes que dev**: los repositorios de ECR se comparten y dev los usa.
 - **`image_tag` automático**: el CD de tero-app (DEVOPS-27) cambia la imagen de
-  los servicios en cada merge. El pipeline toma el SHA que **está corriendo**
-  en dev (`scripts/ci/preparar-variables.sh`), así un apply de infraestructura
+  los servicios en cada merge. El pipeline toma el SHA de la **última revisión
+  registrada** de la task definition de ui en dev (el CD la registra apenas
+  arranca, así que un apply en paralelo con un deploy usa la versión nueva) (`scripts/ci/preparar-variables.sh`), así un apply de infraestructura
   no vuelve los servicios a una versión vieja. Se puede forzar uno con
   *Run workflow* → `image_tag`.
 - **IP del admin fuera del repo**: secret `ADMIN_ALLOWED_CIDRS` (ej.
