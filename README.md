@@ -20,6 +20,8 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `envs/<entorno>.tfvars` | Valores de cada ambiente (dev, test, prod). No llevan secretos. |
 | `scripts/crear-bucket-state.sh` | Crea a mano el bucket del state (única pieza fuera de Terraform). |
 | `scripts/inicializar-db.sh` | Corre la tarea `db-init` que crea `catalogdb`, `cartdb` y la tabla `cart_items`. |
+| `scripts/terraform-ambiente.sh` | Plan, apply (con db-init) o destroy de un ambiente: lo usa el pipeline y se puede correr en CloudShell. |
+| `docs/runbooks/` | Prender el lab de nuevo y apagarlo, y rotación de secretos. |
 | `docs/adr/` | Decisiones de arquitectura (ADR). |
 
 ## Prerrequisitos
@@ -80,9 +82,13 @@ terraform init -reconfigure \
 terraform plan  -var-file="envs/${ENTORNO}.tfvars" -var="image_tag=<sha de tero-app>" -out=tfplan
 terraform apply tfplan
 
-# Solo la primera vez en cada ambiente: crear las bases
+# Crear las bases (idempotente; el pipeline lo hace solo después de cada apply)
 ./scripts/inicializar-db.sh
 ```
+
+Lo mismo en un solo comando: `./scripts/terraform-ambiente.sh dev apply`.
+Para volver a levantar todo después de un Start Lab, seguir el runbook
+[docs/runbooks/prender-el-lab.md](docs/runbooks/prender-el-lab.md).
 
 `image_tag` es el SHA del commit de tero-app cuya imagen está en ECR. En el día a día lo pasa el pipeline de CD.
 
@@ -99,8 +105,10 @@ Arma el plan de dev con providers simulados y verifica, entre otras cosas, que h
 
 ## Pipeline (CI/CD de la infraestructura)
 
-En cada PR: `fmt`, `validate`, `terraform test`, Checkov y `plan` de dev. En cada
-merge a `develop`: el mismo plan se aplica en dev. Detalle en
+En cada PR: `fmt`, `validate`, `terraform test`, Checkov y `plan` (de dev en PRs
+a `develop`, de test y prod en PRs a `main`). En cada merge a `develop`: apply
+en dev. En cada merge a `main`: apply en test y, **con aprobación manual**, en
+prod. Cada apply corre db-init. Detalle en
 [docs/pipeline/terraform.md](docs/pipeline/terraform.md) y triage de Checkov en
 [docs/seguridad/checkov.md](docs/seguridad/checkov.md).
 
