@@ -106,7 +106,7 @@ merge a `develop`: el mismo plan se aplica en dev. Detalle en
 
 ## Outputs
 
-Ver `outputs.tf` (todos tienen `description`). Los más usados:
+Todas las variables y outputs, con el valor de cada ambiente y de dónde sale, están en [docs/terraform/variables-y-outputs.md](docs/terraform/variables-y-outputs.md). Los outputs más usados:
 
 | Output | Para qué |
 |---|---|
