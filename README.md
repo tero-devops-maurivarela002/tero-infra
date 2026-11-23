@@ -123,3 +123,5 @@ Ninguna contraseña está en el repo ni en el state: se generan en el `apply` y 
 ```bash
 aws secretsmanager get-secret-value --secret-id tero-dev/admin --query SecretString --output text
 ```
+
+Para rotarlos (subir `db_password_version` o `admin_secret_version` en `envs/<entorno>.tfvars` por PR) y para el resto de los secretos (credenciales de AWS y token de SonarCloud en GitHub), ver el runbook [docs/runbooks/rotacion-de-secretos.md](docs/runbooks/rotacion-de-secretos.md).

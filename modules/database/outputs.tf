@@ -32,3 +32,12 @@ output "redis_url" {
   description = "URL de conexión a Redis con TLS (rediss://), para checkout."
   value       = "rediss://${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
 }
+
+output "password_version" {
+  description = "Versión vigente de la contraseña de la base. Se usa como variable de entorno de las tareas para que una rotación las reinicie (DEVOPS-35)."
+  value       = aws_secretsmanager_secret_version.db.secret_string_wo_version
+
+  # Quien use este valor espera a que la contraseña nueva esté en RDS y en
+  # Secrets Manager: así las tareas nuevas arrancan leyendo la contraseña nueva.
+  depends_on = [aws_db_instance.this]
+}
