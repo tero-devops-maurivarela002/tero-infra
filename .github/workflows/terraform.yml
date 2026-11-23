@@ -1,4 +1,4 @@
-# Pipeline de Terraform de tero-infra (DEVOPS-45, DEVOPS-36)
+# Pipeline de Terraform de tero-infra (DEVOPS-45, DEVOPS-36, DEVOPS-28)
 #
 # Etapas, encadenadas con "needs":
 #   1. validate -> terraform fmt -check, validate (raíz y global/) y
@@ -7,11 +7,15 @@
 #                  Falla si hay un hallazgo sin justificar. Las excepciones
 #                  están en el código (#checkov:skip=ID:motivo) y explicadas en
 #                  docs/seguridad/checkov.md.
-#   3. dev      -> plan de global/ (ECR) y de dev contra AWS. En un PR el plan
-#                  queda en el resumen del run para revisarlo antes de mergear.
-#                  En un push (merge) a develop se aplica ESE MISMO plan.
+#   3. un job por ambiente (workflow reutilizable terraform-ambiente.yml):
+#        rama develop -> dev:  plan en el PR, apply al mergear.
+#        rama main    -> test: plan en el PR, apply al mergear.
+#                        prod: plan en el PR; al mergear, apply DESPUÉS de test
+#                              y con aprobación manual (environment production).
+#      Cada apply corre db-init (crea las bases de catalog y carts).
 #
-# test y prod se van a sumar en el Sprint 4 (desde main, con aprobación manual).
+# A mano (Run workflow): cualquier ambiente con plan, apply o destroy.
+# Detalle en docs/pipeline/terraform.md y docs/runbooks/prender-el-lab.md.
 
 name: Terraform
 
@@ -22,13 +26,18 @@ on:
     branches: [develop, main]
   workflow_dispatch:
     inputs:
-      action:
-        description: "plan o apply sobre dev"
+      ambiente:
+        description: "Ambiente"
         type: choice
-        options: [plan, apply]
+        options: [dev, test, prod]
+        default: dev
+      action:
+        description: "plan, apply o destroy (prod pide aprobación para apply y destroy)"
+        type: choice
+        options: [plan, apply, destroy]
         default: plan
       image_tag:
-        description: "SHA de tero-app a usar (vacío = el que está corriendo en dev)"
+        description: "SHA de tero-app a usar (vacío = el que corre en el ambiente, o el del ambiente anterior)"
         type: string
         required: false
 
@@ -123,85 +132,46 @@ jobs:
           retention-days: 14
 
   dev:
-    name: dev (plan / apply)
     needs: [validate, checkov]
-    # main todavía no despliega nada (test/prod en el Sprint 4).
-    if: github.base_ref == 'develop' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    # Un solo plan/apply a la vez sobre dev (además del lock del state en S3).
-    concurrency:
-      group: terraform-dev
-      cancel-in-progress: false
-    env:
-      APPLY: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply') }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    if: >-
+      (github.event_name != 'workflow_dispatch' && (github.base_ref == 'develop' || github.ref == 'refs/heads/develop'))
+      || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'dev')
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: dev
+      github_environment: dev
+      image_tag: ${{ inputs.image_tag }}
+      # Push (merge) a develop -> apply. PR -> plan. A mano -> lo que se eligió.
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit
 
-      - name: Instalar Terraform (versión fija y checksum verificado)
-        run: ./scripts/ci/instalar-terraform.sh
+  test:
+    needs: [validate, checkov]
+    if: >-
+      (github.event_name != 'workflow_dispatch' && (github.base_ref == 'main' || github.ref == 'refs/heads/main'))
+      || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'test')
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: test
+      github_environment: test
+      image_tag: ${{ inputs.image_tag }}
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit
 
-      - name: Credenciales de AWS (AWS Academy)
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # Academy da credenciales temporales: sin el session token no autentican.
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
-      - name: Preparar variables (bucket, image_tag, IPs del admin)
-        id: vars
-        env:
-          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
-          ADMIN_ALLOWED_CIDRS: ${{ secrets.ADMIN_ALLOWED_CIDRS }}
-        run: ./scripts/ci/preparar-variables.sh dev
-
-      - name: Plan global/ (ECR)
-        working-directory: global
-        env:
-          TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
-        run: |
-          terraform init -backend-config=../backend/global.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
-          terraform plan -no-color -lock-timeout=15m -out="$RUNNER_TEMP/global.tfplan" | tee "$RUNNER_TEMP/global-plan.txt"
-
-      - name: Plan dev
-        env:
-          TF_DATA_DIR: ${{ runner.temp }}/tf-data-dev
-        run: |
-          terraform init -backend-config=backend/dev.hcl -backend-config="bucket=${{ steps.vars.outputs.bucket }}"
-          # La IP del admin va en un archivo (no en la línea de comandos ni en el repo).
-          terraform plan -no-color -lock-timeout=15m -var-file=envs/dev.tfvars \
-            -var-file="$RUNNER_TEMP/ci.auto.tfvars.json" \
-            -out="$RUNNER_TEMP/dev.tfplan" | tee "$RUNNER_TEMP/dev-plan.txt"
-
-      - name: Resumen del plan
-        if: always()
-        run: |
-          {
-            echo "### Terraform: dev (image_tag \`${{ steps.vars.outputs.image_tag }}\`)"
-            for f in global dev; do
-              [ -f "$RUNNER_TEMP/$f-plan.txt" ] || continue
-              echo "#### $f"
-              grep -E '^Plan:|^No changes|will be (created|destroyed|updated|replaced)|must be replaced' "$RUNNER_TEMP/$f-plan.txt" | sed 's/^/- /' || true
-            done
-            echo
-            if [ "$APPLY" = "true" ]; then echo "Se aplica este plan."; else echo "Solo plan (no se aplica)."; fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # ---- Apply: solo en merge a develop o a mano (workflow_dispatch con apply).
-      # Se aplica el plan guardado arriba: lo que se revisó es exactamente lo que se aplica.
-
-      - name: Apply global/
-        if: env.APPLY == 'true'
-        working-directory: global
-        env:
-          TF_DATA_DIR: ${{ runner.temp }}/tf-data-global
-        run: terraform apply -no-color -lock-timeout=15m "$RUNNER_TEMP/global.tfplan"
-
-      - name: Apply dev
-        if: env.APPLY == 'true'
-        env:
-          TF_DATA_DIR: ${{ runner.temp }}/tf-data-dev
-        run: terraform apply -no-color -lock-timeout=15m "$RUNNER_TEMP/dev.tfplan"
+  prod:
+    # En un merge a main, prod va DESPUÉS de test: si el apply de test falla,
+    # prod no se toca. A mano (Run workflow con prod) test no corre, por eso
+    # la condición acepta que test haya sido "skipped".
+    needs: [validate, checkov, test]
+    if: >-
+      !failure() && !cancelled() && (
+        (github.event_name != 'workflow_dispatch' && (github.base_ref == 'main' || github.ref == 'refs/heads/main'))
+        || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'prod'))
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: prod
+      # Environment con required reviewers: apply y destroy esperan aprobación.
+      github_environment: production
+      image_tag: ${{ inputs.image_tag }}
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit
