@@ -28,6 +28,14 @@ locals {
 
   db_secret = module.database.db_secret_arn
 
+  # Rotación de secretos (DEVOPS-35): ECS lee los secretos solo al arrancar una
+  # tarea. Esta variable de entorno cambia cuando se sube db_password_version o
+  # admin_secret_version, así se registra una task definition nueva y ECS
+  # reemplaza las tareas. Al referenciar los recursos de los secretos, Terraform
+  # además actualiza RDS y Secrets Manager ANTES que los servicios.
+  db_secret_version    = "db-${module.database.password_version}"
+  admin_secret_version = "${local.db_secret_version}-admin-${aws_secretsmanager_secret_version.admin.secret_string_wo_version}"
+
   # Configuración de cada servicio, traducida de docker-compose.yml de tero-app.
   # Los valores sensibles van en "secrets" (Secrets Manager), nunca en "env".
   services = {
@@ -39,6 +47,7 @@ locals {
         RETAIL_CATALOG_PERSISTENCE_PROVIDER = "postgres"
         RETAIL_CATALOG_PERSISTENCE_ENDPOINT = "${module.database.db_address}:${module.database.db_port}"
         RETAIL_CATALOG_PERSISTENCE_DB_NAME  = "catalogdb"
+        SECRETS_VERSION                     = local.db_secret_version
       }
       secrets = {
         RETAIL_CATALOG_PERSISTENCE_USER     = "${local.db_secret}:username::"
@@ -54,6 +63,7 @@ locals {
         CART_POSTGRES_PORT        = tostring(module.database.db_port)
         CART_POSTGRES_DB          = "cartdb"
         PORT                      = "8080"
+        SECRETS_VERSION           = local.db_secret_version
       }
       secrets = {
         CART_POSTGRES_USER     = "${local.db_secret}:username::"
@@ -67,6 +77,7 @@ locals {
         GIN_MODE                           = "release"
         RETAIL_ORDERS_PERSISTENCE_ENDPOINT = "${module.database.db_address}:${module.database.db_port}"
         RETAIL_ORDERS_PERSISTENCE_NAME     = "orders"
+        SECRETS_VERSION                    = local.db_secret_version
       }
       secrets = {
         RETAIL_ORDERS_PERSISTENCE_USERNAME = "${local.db_secret}:username::"
@@ -98,8 +109,9 @@ locals {
       repository = "admin"
       alb        = "public"
       env = {
-        DB_HOST = module.database.db_address
-        DB_PORT = tostring(module.database.db_port)
+        DB_HOST         = module.database.db_address
+        DB_PORT         = tostring(module.database.db_port)
+        SECRETS_VERSION = local.admin_secret_version
       }
       secrets = {
         DB_USER          = "${local.db_secret}:username::"

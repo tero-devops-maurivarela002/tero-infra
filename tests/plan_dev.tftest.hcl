@@ -51,6 +51,21 @@ run "plan_dev" {
   }
 }
 
+# DEVOPS-35: subir la versión de la contraseña tiene que llegar a las tareas,
+# para que ECS las reemplace y lean el secreto nuevo.
+run "rotacion_de_la_base" {
+  command = plan
+
+  variables {
+    db_password_version = 2
+  }
+
+  assert {
+    condition     = module.database.password_version == 2
+    error_message = "La versión de la contraseña tiene que llegar a los servicios (SECRETS_VERSION)."
+  }
+}
+
 # Con los providers simulados también se puede "aplicar" y mirar los outputs.
 run "apply_dev_simulado" {
   command = apply
