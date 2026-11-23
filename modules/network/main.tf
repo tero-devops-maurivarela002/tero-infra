@@ -6,8 +6,17 @@
 #     ECS, la base de datos (RDS) y Redis. Salen a internet (por ejemplo, para
 #     bajar imágenes de ECR) a través del NAT Gateway.
 
+data "aws_region" "current" {}
+
+# Se fijan las zonas por nombre (a, b, c) en vez de tomar "las que haya": si AWS
+# agrega una zona nueva, la red no cambia sola (Checkov CKV_AWS_394).
 data "aws_availability_zones" "available" {
   state = "available"
+
+  filter {
+    name   = "zone-name"
+    values = [for s in ["a", "b", "c"] : "${data.aws_region.current.region}${s}"]
+  }
 }
 
 locals {
@@ -26,6 +35,8 @@ locals {
 # ---------------------------------------------------------------- VPC
 
 resource "aws_vpc" "this" {
+  #checkov:skip=CKV2_AWS_11:Flow logs a CloudWatch requieren un rol propio (no permitido en Academy); mejora planificada con destino S3
+
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true # necesario para los endpoints y para RDS/ElastiCache
@@ -143,4 +154,4 @@ resource "aws_vpc_endpoint" "s3" {
   tags = { Name = "${var.name}-s3-endpoint" }
 }
 
-data "aws_region" "current" {}
+

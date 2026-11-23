@@ -8,11 +8,16 @@ data "aws_region" "current" {}
 
 # Un log group por servicio y ambiente, con retención (decisión de DEVOPS-47).
 resource "aws_cloudwatch_log_group" "this" {
+  #checkov:skip=CKV_AWS_158:Logs cifrados con la clave administrada por CloudWatch; una CMK suma costo
+  #checkov:skip=CKV_AWS_338:Retención decidida en DEVOPS-47: 7 días dev/test, 14 prod (costo); no se guardan datos personales
+
   name              = "/tero/${var.environment}/${var.name}"
   retention_in_days = var.log_retention_days
 }
 
 resource "aws_ecs_task_definition" "this" {
+  #checkov:skip=CKV_AWS_249:En AWS Academy el único rol disponible es LabRole (no se pueden crear roles separados)
+
   family                   = "${var.name_prefix}-${var.name}"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"

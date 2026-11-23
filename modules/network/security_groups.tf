@@ -8,6 +8,8 @@
 # ---------------------------------------------------------------- ALB
 
 resource "aws_security_group" "alb" {
+  #checkov:skip=CKV2_AWS_5:Falso positivo: el SG se asocia en otro módulo (ALB, ECS, RDS, ElastiCache) que Checkov no relaciona
+
   name        = "${var.name}-alb"
   description = "ALB publico de Tero: recibe HTTP desde internet"
   vpc_id      = aws_vpc.this.id
@@ -15,6 +17,8 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  #checkov:skip=CKV_AWS_260:La tienda es pública: el ALB tiene que aceptar HTTP desde internet (sin certificado no hay 443)
+
   security_group_id = aws_security_group.alb.id
   description       = "HTTP desde internet"
   cidr_ipv4         = "0.0.0.0/0"
@@ -47,6 +51,8 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_services" {
 # ---------------------------------------------------------------- Servicios ECS
 
 resource "aws_security_group" "services" {
+  #checkov:skip=CKV2_AWS_5:Falso positivo: el SG se asocia en otro módulo (ALB, ECS, RDS, ElastiCache) que Checkov no relaciona
+
   name        = "${var.name}-services"
   description = "Tareas ECS de Tero: solo aceptan trafico del ALB y entre ellas"
   vpc_id      = aws_vpc.this.id
@@ -85,6 +91,8 @@ resource "aws_vpc_security_group_egress_rule" "services_all" {
 # ---------------------------------------------------------------- ALB interno
 
 resource "aws_security_group" "internal_alb" {
+  #checkov:skip=CKV2_AWS_5:Falso positivo: el SG se asocia en otro módulo (ALB, ECS, RDS, ElastiCache) que Checkov no relaciona
+
   name        = "${var.name}-internal-alb"
   description = "ALB interno de Tero: los servicios se llaman entre si por aca"
   vpc_id      = aws_vpc.this.id
@@ -114,6 +122,8 @@ resource "aws_vpc_security_group_egress_rule" "internal_alb_to_services" {
 # ---------------------------------------------------------------- Base de datos y Redis
 
 resource "aws_security_group" "database" {
+  #checkov:skip=CKV2_AWS_5:Falso positivo: el SG se asocia en otro módulo (ALB, ECS, RDS, ElastiCache) que Checkov no relaciona
+
   name        = "${var.name}-database"
   description = "RDS PostgreSQL de Tero: solo desde los servicios"
   vpc_id      = aws_vpc.this.id
@@ -130,6 +140,8 @@ resource "aws_vpc_security_group_ingress_rule" "database_from_services" {
 }
 
 resource "aws_security_group" "redis" {
+  #checkov:skip=CKV2_AWS_5:Falso positivo: el SG se asocia en otro módulo (ALB, ECS, RDS, ElastiCache) que Checkov no relaciona
+
   name        = "${var.name}-redis"
   description = "ElastiCache Redis de Tero: solo desde los servicios"
   vpc_id      = aws_vpc.this.id

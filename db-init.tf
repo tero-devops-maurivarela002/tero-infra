@@ -5,6 +5,9 @@
 # apply, con scripts/inicializar-db.sh. Es idempotente (se puede repetir).
 
 resource "aws_cloudwatch_log_group" "db_init" {
+  #checkov:skip=CKV_AWS_158:Logs cifrados con la clave administrada por CloudWatch; una CMK suma costo
+  #checkov:skip=CKV_AWS_338:Retención decidida en DEVOPS-47 (costo); la tarea solo inicializa la base
+
   name              = "/tero/${var.environment}/db-init"
   retention_in_days = var.log_retention_days
 }
@@ -26,6 +29,8 @@ locals {
 }
 
 resource "aws_ecs_task_definition" "db_init" {
+  #checkov:skip=CKV_AWS_249:En AWS Academy el único rol disponible es LabRole
+
   family                   = "${local.name}-db-init"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"

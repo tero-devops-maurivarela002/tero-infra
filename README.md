@@ -97,6 +97,13 @@ Arma el plan de dev con providers simulados y verifica, entre otras cosas, que h
 
 `-reconfigure` hace falta al cambiar de ambiente, porque cada uno tiene su propia key de state.
 
+## Pipeline (CI/CD de la infraestructura)
+
+En cada PR: `fmt`, `validate`, `terraform test`, Checkov y `plan` de dev. En cada
+merge a `develop`: el mismo plan se aplica en dev. Detalle en
+[docs/pipeline/terraform.md](docs/pipeline/terraform.md) y triage de Checkov en
+[docs/seguridad/checkov.md](docs/seguridad/checkov.md).
+
 ## Outputs
 
 Ver `outputs.tf` (todos tienen `description`). Los más usados:
