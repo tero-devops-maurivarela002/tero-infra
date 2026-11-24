@@ -46,6 +46,7 @@ Regla: **en el repo va solo lo que no es sensible y no cambia en cada deploy.** 
 | `db_password_version` | `number` | `1` | `1` | `1` | `1` | Subirla en 1 genera una contraseña nueva para la base (rotación). |
 | `redis_node_type` | `string` | `"cache.t3.micro"` | `"cache.t3.micro"` | `"cache.t3.micro"` | `"cache.t3.micro"` | Tamaño del nodo de Redis. |
 | `redis_replicas` | `number` | `0` | `0` | `0` | `1` | Réplicas de Redis además del primario. |
+| `alert_email` | `string` (sensible) | `""` | secret | secret | secret | Email que recibe las alarmas por SNS (secret `ALERT_EMAIL`). Vacío = sin suscripción: las alarmas quedan en el dashboard. |
 
 ### Por qué cambian entre ambientes
 
@@ -94,6 +95,8 @@ Se leen con `terraform output` (o `terraform output -raw <nombre>` para usarlos 
 | `db_endpoint`, `redis_endpoint` | Host (y puerto) de PostgreSQL y Redis; solo accesibles desde los servicios | Diagnóstico |
 | `db_secret_arn`, `admin_secret_arn` | ARN de los secretos en Secrets Manager | Ver o rotar credenciales |
 | `db_init_task_definition`, `services_security_group_id` | Tarea que crea las bases y su security group | `scripts/inicializar-db.sh` |
+| `dashboard_url` | Link al dashboard de CloudWatch `tero-<entorno>-operacion` | Personas (operación, evidencias) |
+| `alerts_topic_arn`, `alarm_names` | Topic de SNS de las alarmas y nombres de las alarmas | Probar alarmas (`aws cloudwatch set-alarm-state`), runbooks |
 
 Ningún output devuelve una contraseña: solo el ARN del secreto.
 
@@ -107,6 +110,7 @@ Cada módulo de `modules/` documenta sus variables en su propio `variables.tf` (
 | `alb` | 9 | Subnets, security group, puertos y destinos (se usa dos veces: público e interno) |
 | `database` | 18 | Todas las `db_*` y `redis_*` |
 | `ecs-service` | 18 | Imagen, CPU, memoria, cantidad de tareas, variables de entorno y secretos de cada servicio |
+| `monitoring` | 10 | Cluster, servicios, sufijos del ALB y del target group de ui, `alert_email` (dashboard, alarmas y SNS) |
 
 ## 6. Cómo agregar una variable nueva
 

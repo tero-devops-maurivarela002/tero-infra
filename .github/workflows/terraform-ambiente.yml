@@ -71,6 +71,7 @@ jobs:
         env:
           INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
           ADMIN_ALLOWED_CIDRS: ${{ secrets.ADMIN_ALLOWED_CIDRS }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: ./scripts/terraform-ambiente.sh "${{ inputs.ambiente }}" plan
 
   aplicar:
@@ -104,4 +105,5 @@ jobs:
         env:
           INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
           ADMIN_ALLOWED_CIDRS: ${{ secrets.ADMIN_ALLOWED_CIDRS }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: ./scripts/terraform-ambiente.sh "${{ inputs.ambiente }}" "${{ inputs.accion }}"

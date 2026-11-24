@@ -14,6 +14,7 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `modules/alb` | ALB con un listener y target group por servicio. Se usa dos veces: público (ui y admin) e interno (catalog, carts, orders y checkout). |
 | `modules/database` | RDS PostgreSQL, ElastiCache Redis y el secreto de la base. |
 | `modules/ecs-service` | Un microservicio en Fargate (reutilizable, se usa 6 veces). |
+| `modules/monitoring` | Dashboard de CloudWatch, alarmas (disponibilidad, errores 5xx, latencia p95) y topic de SNS. |
 | `tests/` | `terraform test` con providers simulados (no toca AWS). |
 | `backend/<entorno>.hcl` | Key del state, región, cifrado y lock de cada ambiente (y `global.hcl` para lo compartido). |
 | `global/` | Recursos compartidos por los 3 ambientes: los repositorios de ECR (state propio). |
@@ -21,7 +22,7 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `scripts/crear-bucket-state.sh` | Crea a mano el bucket del state (única pieza fuera de Terraform). |
 | `scripts/inicializar-db.sh` | Corre la tarea `db-init` que crea `catalogdb`, `cartdb` y la tabla `cart_items`. |
 | `scripts/terraform-ambiente.sh` | Plan, apply (con db-init) o destroy de un ambiente: lo usa el pipeline y se puede correr en CloudShell. |
-| `docs/runbooks/` | Prender el lab de nuevo y apagarlo, y rotación de secretos. |
+| `docs/runbooks/` | Prender el lab de nuevo y apagarlo, rotación de secretos y qué hacer con cada alarma. |
 | `docs/adr/` | Decisiones de arquitectura (ADR). |
 
 ## Prerrequisitos
