@@ -147,3 +147,10 @@ variable "redis_replicas" {
   type        = number
   default     = 0
 }
+
+variable "alert_email" {
+  description = "Email que recibe las alarmas (SNS). No se versiona (repo público): el pipeline lo toma del secret ALERT_EMAIL. Vacío = sin suscripción."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

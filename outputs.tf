@@ -91,3 +91,18 @@ output "services_security_group_id" {
   description = "Security group de las tareas (lo usa scripts/inicializar-db.sh)."
   value       = module.network.services_security_group_id
 }
+
+output "dashboard_url" {
+  description = "Link al dashboard de operación del ambiente en la consola de CloudWatch."
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${module.monitoring.dashboard_name}"
+}
+
+output "alerts_topic_arn" {
+  description = "ARN del topic SNS de alertas (alarmas de CloudWatch y Lambda de seguridad)."
+  value       = module.monitoring.sns_topic_arn
+}
+
+output "alarm_names" {
+  description = "Alarmas del ambiente: disponibilidad, errores 5xx y latencia p95."
+  value       = module.monitoring.alarm_names
+}

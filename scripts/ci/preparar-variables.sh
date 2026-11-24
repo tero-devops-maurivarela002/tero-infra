@@ -7,6 +7,7 @@
 #   - admin_allowed_cidrs: las IPs que pueden entrar al admin. Vienen del secret
 #     ADMIN_ALLOWED_CIDRS (repo público: la IP no se versiona) y se enmascaran
 #     para que no aparezcan en los logs del plan.
+#   - alert_email: a quién le llegan las alarmas (secret ALERT_EMAIL, opcional).
 # Deja un archivo $RUNNER_TEMP/ci.auto.tfvars.json que se pasa con -var-file.
 set -euo pipefail
 
@@ -74,8 +75,12 @@ for c in $(echo "$cidrs" | jq -r '.[]'); do
   echo "::add-mask::${c%/*}"
 done
 
-jq -n --arg tag "$image_tag" --argjson cidrs "$cidrs" \
-  '{image_tag: $tag, admin_allowed_cidrs: $cidrs}' > "$OUT"
+# 3. Email de las alarmas (opcional, secret ALERT_EMAIL): dato personal, no se versiona.
+alert_email="${ALERT_EMAIL:-}"
+[ -z "$alert_email" ] || echo "::add-mask::${alert_email}"
+
+jq -n --arg tag "$image_tag" --argjson cidrs "$cidrs" --arg email "$alert_email" \
+  '{image_tag: $tag, admin_allowed_cidrs: $cidrs, alert_email: $email}' > "$OUT"
 
 {
   echo "bucket=${bucket}"

@@ -18,6 +18,7 @@
 # Variables opcionales:
 #   INPUT_IMAGE_TAG      SHA de tero-app a usar (si no, lo elige preparar-variables.sh)
 #   ADMIN_ALLOWED_CIDRS  IPs del admin, ej. ["1.2.3.4/32"] (secret del repo)
+#   ALERT_EMAIL          email que recibe las alarmas (secret del repo)
 set -euo pipefail
 
 AMBIENTE="${1:?Falta el ambiente (dev, test o prod)}"

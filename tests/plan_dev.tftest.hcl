@@ -24,6 +24,12 @@ mock_provider "aws" {
   mock_resource "aws_ecs_cluster" {
     defaults = { arn = "arn:aws:ecs:us-east-1:123456789012:cluster/tero-dev" }
   }
+  mock_resource "aws_sns_topic" {
+    defaults = { arn = "arn:aws:sns:us-east-1:123456789012:tero-dev-alertas" }
+  }
+  mock_resource "aws_cloudwatch_metric_alarm" {
+    defaults = { arn = "arn:aws:cloudwatch:us-east-1:123456789012:alarm:tero-dev-x" }
+  }
   mock_resource "aws_lb_target_group" {
     defaults = { arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tero-dev/abc" }
   }
@@ -99,4 +105,30 @@ run "ambiente_invalido" {
   }
 
   expect_failures = [var.environment]
+}
+
+# DEVOPS-49/50/51: observabilidad mínima que pide la letra (1 dashboard y al
+# menos 2 alertas, cada una con su runbook) y que avisen por SNS.
+run "observabilidad" {
+  command = plan
+
+  assert {
+    condition     = length(module.monitoring.alarm_names) >= 2
+    error_message = "Tiene que haber al menos 2 alarmas."
+  }
+
+  assert {
+    condition     = alltrue([for d in values(module.monitoring.alarm_descriptions) : strcontains(d, "Runbook:")])
+    error_message = "Cada alarma tiene que nombrar su runbook en la descripción."
+  }
+
+  assert {
+    condition     = module.monitoring.dashboard_name == "tero-dev-operacion"
+    error_message = "Tiene que haber un dashboard de operación por ambiente."
+  }
+
+  assert {
+    condition     = !module.monitoring.email_subscribed
+    error_message = "Sin alert_email no se crea suscripción (el email no se versiona)."
+  }
 }
