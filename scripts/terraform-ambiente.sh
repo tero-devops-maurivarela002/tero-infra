@@ -49,11 +49,13 @@ resumen_plan() { # $1 = nombre, $2 = archivo con la salida del plan
 
 echo "### Terraform: ${AMBIENTE} → ${ACCION} (image_tag \`${IMAGE_TAG}\`)" >> "$SUMMARY"
 
-# ---- global/ (repositorios de ECR): se comparten, se manejan solo desde dev.
+# ---- global/ (repositorios de ECR y Lambda de seguridad): se comparten, se manejan solo desde dev.
 if [ "$AMBIENTE" = "dev" ] && [ "$ACCION" != "destroy" ]; then
   (
     cd global
     export TF_DATA_DIR="$TMP/tf-data-global"
+    # Mail de las alertas del escaneo de ECR (DEVOPS-46); vacío = sin suscripción.
+    export TF_VAR_alert_email="${ALERT_EMAIL:-}"
     terraform init -reconfigure -backend-config=../backend/global.hcl -backend-config="bucket=${BUCKET}" >/dev/null
     terraform plan -no-color -lock-timeout=15m -out="$TMP/global.tfplan" | tee "$TMP/global-plan.txt"
     if [ "$ACCION" = "apply" ]; then
