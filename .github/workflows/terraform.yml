@@ -1,8 +1,9 @@
 # Pipeline de Terraform de tero-infra (DEVOPS-45, DEVOPS-36, DEVOPS-28)
 #
 # Etapas, encadenadas con "needs":
-#   1. validate -> terraform fmt -check, validate (raíz y global/) y
-#                  terraform test (con mock_provider: no toca AWS).
+#   1. validate -> terraform fmt -check, validate (raíz y global/),
+#                  terraform test (con mock_provider: no toca AWS) y los tests
+#                  de la Lambda de seguridad (DEVOPS-46).
 #   2. checkov  -> análisis estático de seguridad de la infraestructura (IaC).
 #                  Falla si hay un hallazgo sin justificar. Las excepciones
 #                  están en el código (#checkov:skip=ID:motivo) y explicadas en
@@ -85,6 +86,14 @@ jobs:
       - name: terraform test
         # Plan con proveedores simulados: valida la lógica sin credenciales.
         run: terraform test
+
+      - name: terraform test (global/)
+        working-directory: global
+        run: terraform test
+
+      - name: Tests de la Lambda de seguridad (DEVOPS-46)
+        # Python puro con clientes falsos: no necesita AWS ni boto3.
+        run: python3 -m unittest discover -s global/lambda/alertas_escaneo_ecr -v
 
   checkov:
     runs-on: ubuntu-latest

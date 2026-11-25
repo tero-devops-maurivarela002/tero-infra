@@ -17,7 +17,7 @@ Infraestructura como código (Terraform) de Tero en AWS. La aplicación y sus pi
 | `modules/monitoring` | Dashboard de CloudWatch, alarmas (disponibilidad, errores 5xx, latencia p95) y topic de SNS. |
 | `tests/` | `terraform test` con providers simulados (no toca AWS). |
 | `backend/<entorno>.hcl` | Key del state, región, cifrado y lock de cada ambiente (y `global.hcl` para lo compartido). |
-| `global/` | Recursos compartidos por los 3 ambientes: los repositorios de ECR (state propio). |
+| `global/` | Recursos compartidos por los 3 ambientes: los repositorios de ECR y la Lambda que avisa de vulnerabilidades graves en las imágenes (state propio). |
 | `envs/<entorno>.tfvars` | Valores de cada ambiente (dev, test, prod). No llevan secretos. |
 | `scripts/crear-bucket-state.sh` | Crea a mano el bucket del state (única pieza fuera de Terraform). |
 | `scripts/inicializar-db.sh` | Corre la tarea `db-init` que crea `catalogdb`, `cartdb` y la tabla `cart_items`. |

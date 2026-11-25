@@ -58,6 +58,8 @@ CKV_AWS_2, CKV_AWS_103, CKV2_AWS_20, CKV_AWS_260, CKV_AWS_378.
 | CKV_AWS_118 | RDS enhanced monitoring | Requiere el rol `rds-monitoring-role`. Se usan métricas estándar de CloudWatch. |
 | CKV2_AWS_11 | VPC flow logs | A CloudWatch requiere rol propio. Mejora planificada: flow logs a S3 (no necesita rol). |
 | CKV2_AWS_28 | WAF en el ALB público | Costo fijo mensual; no habilitado en el lab. |
+| CKV_AWS_50 | X-Ray en la Lambda de seguridad (DEVOPS-46) | Necesita permisos de X-Ray en LabRole; si faltan, falla la creación. La Lambda es de un solo paso y deja log estructurado. |
+| CKV_AWS_115, CKV_AWS_116, CKV_AWS_117, CKV_AWS_173, CKV_AWS_272 | Lambda: concurrencia reservada, DLQ, VPC, KMS propio para variables, code signing | Concurrencia baja en Academy; EventBridge ya reintenta; no usa recursos de la VPC; las variables no tienen secretos; code signing necesita AWS Signer. Detalle en [alertas-escaneo-ecr.md](alertas-escaneo-ecr.md). |
 
 **4. Costo / complejidad no justificada en este proyecto.**
 

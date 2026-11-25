@@ -6,6 +6,11 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    # Arma el .zip de la Lambda de seguridad (DEVOPS-46).
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7"
+    }
   }
 
   # Mismo bucket que los ambientes, key global/terraform.tfstate (backend/global.hcl).

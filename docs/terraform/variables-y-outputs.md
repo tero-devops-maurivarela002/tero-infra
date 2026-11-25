@@ -72,11 +72,14 @@ Se aplican una sola vez por cuenta, no por ambiente.
 | `repository_prefix` | `string` | `"tero"` | Los repositorios quedan como `<prefijo>/<servicio>`. |
 | `services` | `set(string)` | `["catalog", "cart", "orders", "checkout", "ui", "admin"]` | Un repositorio de ECR por servicio. |
 | `images_to_keep` | `number` | `30` | Imágenes que se guardan por repositorio; las más viejas se borran solas. |
+| `alert_email` | `string` (sensible) | `""` | Mail de las alertas del escaneo de ECR. Lo pasa el pipeline desde el secret `ALERT_EMAIL` (`TF_VAR_alert_email`). |
+| `scan_alert_severities` | `list(string)` | `["CRITICAL", "HIGH"]` | Severidades del escaneo de ECR que generan un aviso (DEVOPS-46). |
 
 | Output | Para qué |
 |---|---|
 | `ecr_registry` | Registry de ECR de la cuenta (`docker login` y URL de las imágenes). |
 | `ecr_repository_urls` | URL de cada repositorio, por servicio. |
+| `security_topic_arn`, `scan_alert_lambda`, `scan_alert_email_subscribed` | Topic de SNS, nombre de la Lambda de seguridad y si hay un mail suscripto (DEVOPS-46). |
 
 ## 4. Outputs del ambiente
 
