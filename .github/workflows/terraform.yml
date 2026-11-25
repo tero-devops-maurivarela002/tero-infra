@@ -1,0 +1,186 @@
+# Pipeline de Terraform de tero-infra (DEVOPS-45, DEVOPS-36, DEVOPS-28)
+#
+# Etapas, encadenadas con "needs":
+#   1. validate -> terraform fmt -check, validate (raíz y global/),
+#                  terraform test (con mock_provider: no toca AWS) y los tests
+#                  de la Lambda de seguridad (DEVOPS-46).
+#   2. checkov  -> análisis estático de seguridad de la infraestructura (IaC).
+#                  Falla si hay un hallazgo sin justificar. Las excepciones
+#                  están en el código (#checkov:skip=ID:motivo) y explicadas en
+#                  docs/seguridad/checkov.md.
+#   3. un job por ambiente (workflow reutilizable terraform-ambiente.yml):
+#        rama develop -> dev:  plan en el PR, apply al mergear.
+#        rama main    -> test: plan en el PR, apply al mergear.
+#                        prod: plan en el PR; al mergear, apply DESPUÉS de test
+#                              y con aprobación manual (environment production).
+#      Cada apply corre db-init (crea las bases de catalog y carts).
+#
+# A mano (Run workflow): cualquier ambiente con plan, apply o destroy.
+# Detalle en docs/pipeline/terraform.md y docs/runbooks/prender-el-lab.md.
+
+name: Terraform
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente"
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      action:
+        description: "plan, apply o destroy (prod pide aprobación para apply y destroy)"
+        type: choice
+        options: [plan, apply, destroy]
+        default: plan
+      image_tag:
+        description: "SHA de tero-app a usar (vacío = el que corre en el ambiente, o el del ambiente anterior)"
+        type: string
+        required: false
+
+# Mínimo privilegio: solo leer el código (checkov sube SARIF con su propio permiso).
+permissions:
+  contents: read
+
+# bash con pipefail: si terraform falla, el "| tee" no lo tapa.
+defaults:
+  run:
+    shell: bash
+
+env:
+  TF_VERSION: 1.17.2
+  CHECKOV_VERSION: 3.4.5
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Terraform (versión fija y checksum verificado)
+        run: ./scripts/ci/instalar-terraform.sh
+
+      - name: terraform fmt -check
+        # Falla si algún archivo no está formateado (se arregla con terraform fmt -recursive).
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform validate (raíz)
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform validate (global/)
+        working-directory: global
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform test
+        # Plan con proveedores simulados: valida la lógica sin credenciales.
+        run: terraform test
+
+      - name: terraform test (global/)
+        working-directory: global
+        run: terraform test
+
+      - name: Tests de la Lambda de seguridad (DEVOPS-46)
+        # Python puro con clientes falsos: no necesita AWS ni boto3.
+        run: python3 -m unittest discover -s global/lambda/alertas_escaneo_ecr -v
+
+  checkov:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # subir el SARIF a GitHub Security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Checkov (versión fija)
+        run: |
+          python3 -m pip install --user "checkov==${CHECKOV_VERSION}"
+          checkov --version
+
+      - name: Checkov (gate)
+        # Falla con cualquier hallazgo que no tenga un skip justificado.
+        run: |
+          checkov -d . --framework terraform --compact \
+            --output cli --output sarif --output-file-path console,checkov
+
+      - name: ¿Hay reporte SARIF?
+        # (hashFiles() falla en este repo; se chequea el archivo a mano)
+        id: sarif
+        if: always()
+        run: |
+          if [ -f checkov/results_sarif.sarif ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+          ls -la checkov/ || true
+
+      - name: Publicar hallazgos en GitHub Security
+        if: always() && steps.sarif.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: checkov/results_sarif.sarif
+          category: checkov
+
+      - name: Guardar el reporte
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checkov
+          path: checkov/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  dev:
+    needs: [validate, checkov]
+    if: >-
+      (github.event_name != 'workflow_dispatch' && (github.base_ref == 'develop' || github.ref == 'refs/heads/develop'))
+      || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'dev')
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: dev
+      github_environment: dev
+      image_tag: ${{ inputs.image_tag }}
+      # Push (merge) a develop -> apply. PR -> plan. A mano -> lo que se eligió.
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit
+
+  test:
+    needs: [validate, checkov]
+    if: >-
+      (github.event_name != 'workflow_dispatch' && (github.base_ref == 'main' || github.ref == 'refs/heads/main'))
+      || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'test')
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: test
+      github_environment: test
+      image_tag: ${{ inputs.image_tag }}
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit
+
+  prod:
+    # En un merge a main, prod va DESPUÉS de test: si el apply de test falla,
+    # prod no se toca. A mano (Run workflow con prod) test no corre, por eso
+    # la condición acepta que test haya sido "skipped".
+    needs: [validate, checkov, test]
+    if: >-
+      !failure() && !cancelled() && (
+        (github.event_name != 'workflow_dispatch' && (github.base_ref == 'main' || github.ref == 'refs/heads/main'))
+        || (github.event_name == 'workflow_dispatch' && inputs.ambiente == 'prod'))
+    uses: ./.github/workflows/terraform-ambiente.yml
+    with:
+      ambiente: prod
+      # Environment con required reviewers: apply y destroy esperan aprobación.
+      github_environment: production
+      image_tag: ${{ inputs.image_tag }}
+      accion: ${{ github.event_name == 'workflow_dispatch' && inputs.action || (github.event_name == 'push' && 'apply' || 'plan') }}
+    secrets: inherit

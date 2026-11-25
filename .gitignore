@@ -15,6 +15,9 @@ crash.*.log
 # to change depending on the environment.
 *.tfvars
 *.tfvars.json
+# Excepción: los tfvars por ambiente se versionan (lo pide la letra).
+# No llevan secretos: los secretos van en Secrets Manager.
+!envs/*.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
@@ -42,3 +45,6 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+# Zip de la Lambda (lo arma Terraform en cada plan) y caché de Python
+global/.build/
+__pycache__/
