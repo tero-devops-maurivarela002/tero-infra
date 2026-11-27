@@ -35,3 +35,34 @@ sana en los 2 últimos minutos) y la alarma se recuperó sola:
 Las alarmas de errores 5xx y latencia p95 (DEVOPS-51) usan el mismo topic y se
 ven en verde (OK) en el dashboard. A los mails se les recortó el pie con el link
 de desuscripción.
+
+## DEVOPS-28: ambientes test y prod, prod con aprobación manual
+
+25/11/2026, merge de `develop` a `main` (PR #16). El pipeline aplicó test solo y
+se frenó antes de tocar prod: el job `apply prod` usa el environment
+`production`, que exige la aprobación de uno de los dos integrantes.
+
+![Prod esperando aprobación](DEVOPS-28-prod-esperando-aprobacion.png)
+
+La aprobación, con el comentario de por qué se aprueba (test ya estaba OK):
+
+![Aprobación de prod](DEVOPS-28-aprobacion-prod.png)
+
+## DEVOPS-49: dashboards de test y prod
+
+Cada ambiente tiene su dashboard (`tero-<ambiente>-operacion`), creado por el
+mismo módulo con sus propios umbrales.
+
+Test recién creado: la alarma de disponibilidad está en ALARM porque las tareas
+todavía no tenían la imagen desplegada (la alarma trata "sin datos" como caída,
+a propósito):
+
+![Dashboard de test recién creado](DEVOPS-49-dashboard-test-recien-creado.png)
+
+Test después del deploy de tero-app, con las 3 alarmas en OK:
+
+![Dashboard de test](DEVOPS-49-dashboard-test.png)
+
+Prod, con 2 tareas por servicio:
+
+![Dashboard de prod](DEVOPS-49-dashboard-prod.png)
